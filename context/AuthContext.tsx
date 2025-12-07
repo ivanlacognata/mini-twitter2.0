@@ -1,30 +1,17 @@
+'use client'; 
 
-'use client';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useRouter } from 'next/navigation'; 
 
-import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { login as apiLogin, register as apiRegister } from '@/lib/api'; 
-
-export interface User { 
-    id: string; 
-    username: string; 
-    email: string; 
-}
-
-export interface LoginData { 
-    email: string; 
-    password: string; 
-}
-
-export interface RegisterData extends LoginData { 
-    username: string; 
+interface User {
+  id: string;
+  username: string;
+  email: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  isLoading: boolean;
-  login: (data: LoginData) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  login: (userData: User) => void;
   logout: () => void;
 }
 
@@ -32,65 +19,48 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  const login = useCallback(async (data: LoginData) => {
-    setIsLoading(true);
-    try {
-      const loggedUser = await apiLogin(data); 
-      setUser(loggedUser);
-      localStorage.setItem('user', JSON.stringify(loggedUser));
-      router.push('/'); 
-    } catch (error) {
+  const login = (userData: any) => {
+  const actualUser = userData.user ? userData.user : userData;
 
-      throw error; 
-    } finally {
-      setIsLoading(false);
-    }
-  }, [router]);
+  const normalizedUser = {
+    id: actualUser.id || actualUser._id || null,
+    username: actualUser.username || "",
+    email: actualUser.email || "",
+  };
 
-  const register = useCallback(async (data: RegisterData) => {
-    setIsLoading(true);
-    try {
-      const newUser = await apiRegister(data);
-      setUser(newUser);
-      localStorage.setItem('user', JSON.stringify(newUser));
-      router.push('/'); 
-    } catch (error) {
 
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [router]);
+  setUser(normalizedUser);
+  localStorage.setItem('user', JSON.stringify(normalizedUser));
+  router.push('/');
+};
 
-  const logout = useCallback(() => {
+
+  const logout = () => {
     setUser(null);
-    localStorage.removeItem('user');
-    router.push('/login');
-  }, [router]);
+    localStorage.removeItem('user'); 
+    router.push('/');
+  };
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
     }
-    setIsLoading(false);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = () => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-
-      throw new Error('useAuth deve essere utilizzato all\'interno di un AuthProvider');
-    }
-    return context;
-  };
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth deve essere usato all\'interno di un AuthProvider');
+  }
+  return context;
+};

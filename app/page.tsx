@@ -1,19 +1,35 @@
+'use client';
 
-import MainLayout from '@/components/organisms/MainLayout'; 
-import Feed from '@/components/organisms/Feed'; 
-import NewPostForm from '@/components/organisms/NewPostForm';
+import React, { useState } from 'react';
+import MainLayout from '@/components/organisms/MainLayout';
+import Feed from '@/components/organisms/Feed';
+import { useAuth } from '@/context/AuthContext';
 
 export default function HomePage() {
-  return (
-  <MainLayout>
-    <div className="p-4 sticky top-0 bg-[#020618] z-10">
-  <div className="border-b border-gray-800 w-[95%] pb-2">
-    <h1 className="text-xl font-bold">Discover</h1>
-  </div>
-</div>
+  const [posts, setPosts] = useState<any[]>([]);
+  const { user } = useAuth();
+  const title = user ? 'Il tuo Feed' : 'Discover';
 
-      <NewPostForm />
-      <Feed /> 
-      </MainLayout>
-      );
+  return (
+    <MainLayout>
+      {/* HEADER STICKY PERFETTAMENTE ALLINEATO AL FEED */}
+      <div
+        className="
+          sticky top-0 z-20 
+          backdrop-blur-sm bg-[#020618]/80
+          border-b border-gray-800
+          w-full
+        "
+      >
+        <div className="px-6 py-3">
+          <h1 className="text-xl font-bold">{title}</h1>
+        </div>
+      </div>
+
+      {/* FEED */}
+      <div className="w-full">
+        <Feed posts={posts} setPosts={setPosts} />
+      </div>
+    </MainLayout>
+  );
 }

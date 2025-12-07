@@ -1,110 +1,112 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/atoms/Input';
 import Link from 'next/link';
+import { loginUser, verifyOtp, getMe } from '@/lib/api/auth';
+import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { authLogin } from '@/lib/api'; 
 
 const LoginForm: React.FC = () => {
-  const router = useRouter();
-
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [otp, setOtp] = useState('');
+  const [requiresOtp, setRequiresOtp] = useState(false);
+  const [tmpToken, setTmpToken] = useState('');
 
-  const isDisabled = loading || username.trim() === '' || password.trim() === '';
+  const { login } = useAuth();
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDisabled) return;
-
-    setLoading(true);
-    setError(null);
 
     try {
-      const data = await authLogin(username, password); 
+      if (!requiresOtp) {
+        const res = await loginUser({ username, password });
 
-      if (data.requires_otp) {
-        
-        sessionStorage.setItem('tempToken', data.temp_token); 
-        
-        router.push('/otp-verification'); 
+        if (res.requires_otp) {
+          setRequiresOtp(true);
+          setTmpToken(res.temp_token);
+          return;
+        }
 
-      } else {
-        sessionStorage.setItem('authToken', data.token);
-        sessionStorage.setItem('user', JSON.stringify(data.user)); 
+        localStorage.setItem('token', res.token);
+
+        const userData = await getMe();
+        localStorage.setItem('user', JSON.stringify(userData));
+        login(userData);
 
         router.push('/'); 
-      }
+      } else {
+        const res = await verifyOtp({ temp_token: tmpToken, otp_token: otp });
+        localStorage.setItem('token', res.token);
 
-    } catch (err) {
-      console.error("Errore di Login:", err);
-      const apiError = err as any; 
-      
-      let errorMessage = "Credenziali non valide. Riprova.";
+        const userData = await getMe();
+        localStorage.setItem('user', JSON.stringify(userData));
+        login(userData);
 
-      if (apiError.status === 400 || apiError.status === 401) {
-          errorMessage = apiError.message; 
-      } else if (apiError.status === 500) {
-          errorMessage = "Errore interno del server. Riprova più tardi.";
+        router.push('/');
       }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+    } catch (err: any) {
+      alert(err.message || 'Errore durante il login');
     }
   };
 
   return (
-    <div className="
-      p-10 border border-gray-800 rounded-xl shadow-2xl bg-[#0f172b] max-w-md mx-auto
-    ">
-      <h2 className="text-3xl font-bold text-white mb-6 text-center">Accedi</h2>
-      
-      {error && (
-        <div className="text-red-500 bg-red-900/30 p-3 rounded text-sm border border-red-500 text-center mb-4">
-          {error}
-        </div>
+    <div className="p-10 border border-gray-800 rounded-xl shadow-2xl bg-[#0f172b] max-w-md mx-auto">
+      {!requiresOtp ? (
+        <>
+          <h2 className="text-3xl font-bold text-white mb-6 text-center">Accedi</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <Input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="submit"
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-full"
+            >
+              Continua
+            </button>
+          </form>
+          <div className="flex justify-center mt-4">
+            <span className="text-gray-400">Non hai un account?</span>
+            <Link href="/register" className="text-blue-500 underline ml-1">Registrati</Link>
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 className="text-2xl font-bold text-center mb-2">Verifica OTP</h2>
+          <p className="text-sm text-gray-400 text-center mb-4">
+            Inserisci il codice OTP da Google Authenticator
+          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              type="text"
+              placeholder="123456"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+            />
+            <button
+              type="submit"
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-full"
+            >
+              Verifica e Accedi
+            </button>
+          </form>
+        </>
       )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        
-        <label htmlFor="username" className="text-sm text-gray-400 mb-3 block">Username</label>
-        <Input 
-          type="text" 
-          placeholder="username" 
-          value={username} 
-          onChange={(e) => setUsername(e.target.value)} 
-          required 
-        />
-        
-        <label htmlFor="password" className="text-sm text-gray-400 mb-3 block">Password</label>
-        <Input 
-          type="password" 
-          placeholder="*******" 
-          value={password} 
-          onChange={(e) => setPassword(e.target.value)} 
-          required 
-        />
-        
-        <button
-          type="submit"
-          disabled={isDisabled}
-          className={`
-            w-full py-3 rounded-full transition-colors mt-6 font-bold text-white
-            ${isDisabled ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}
-          `}
-        >
-          {loading ? 'Accesso in corso...' : 'Accedi'}
-        </button>
-
-        <div className="flex justify-center space-x-1">
-          <h6 className="text-s text-gray-400 text-center">Non hai un account?</h6>
-          <Link href="/register" className="text-s text-blue-500 underline">Registrati</Link>
-        </div>
-      </form>
     </div>
   );
 };

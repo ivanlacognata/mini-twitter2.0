@@ -1,47 +1,87 @@
+'use client';
 
-'use client'
-
-import React, { useState, useEffect } from 'react';
-import { getPosts, NormalizedPost } from '@/lib/api';
+import React, { useEffect, useState } from 'react';
 import PostCard from '@/components/molecules/PostCard';
+import { getPosts } from '@/lib/api/posts';
+import { getComments } from '@/lib/api/comments';
+import { getLikes } from '@/lib/api/likes';
 
-const mockPosts = [
-  { 
-    id: '1', 
-    content: "Ciao mondo! Questo è il mio primo post in Next.js con Tailwind. L'accesso ospite mi permette di leggere, ma non di agire!" 
-  },
-  { 
-    id: '2', 
-    content: "L'architettura dei componenti è la chiave. Mantenere Atomi, Molecole e Organismi separati rende il codice pulito e manutenibile." 
-  },
-  { 
-    id: '3', 
-    content: "Testing l'accesso ospite. Se sono loggato, i pulsanti Like/Commento su queste card si attiveranno automaticamente, grazie a useAuth." 
-  },
-];
+interface FeedProps {
+  posts: any[];
+  setPosts: React.Dispatch<React.SetStateAction<any[]>>;
+}
 
-const Feed: React.FC = () => {
+const Feed: React.FC<FeedProps> = ({ posts, setPosts }) => {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchPostsWithCounts = async () => {
+      try {
+        setLoading(true);
+
+        const data = await getPosts({ limit: 20, offset: 0 });
+        const postsList = data.items || [];
+
+        const postsWithCounts = await Promise.all(
+          postsList.map(async (post: any) => {
+            try {
+              const [likesRes, commentsRes] = await Promise.all([
+                getLikes({ post_id: post.id, count: true }),
+                getComments({ post_id: post.id, count: true }),
+              ]);
+
+              const likesCount =
+                likesRes?.count ?? likesRes?.items?.length ?? 0;
+
+              const commentCount =
+                commentsRes?.count ?? commentsRes?.items?.length ?? 0;
+
+              return {
+                ...post,
+                likes_count: likesCount,
+                comment_count: commentCount,
+              };
+            } catch {
+              return { ...post, likes_count: 0, comment_count: 0 };
+            }
+          })
+        );
+
+        setPosts(postsWithCounts);
+      } catch (err: any) {
+        console.error('Errore caricamento feed:', err);
+        setError(err.message || 'Errore nel caricamento dei post');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (posts.length === 0) fetchPostsWithCounts();
+  }, [posts.length, setPosts]);
+
+  if (loading)
+    return <p className="text-center p-4 text-gray-400">Caricamento post...</p>;
+
+  if (error)
+    return <p className="text-center p-4 text-red-500">{error}</p>;
+
   return (
     <div className="w-full">
-      {mockPosts.map(post => (
-        <PostCard key={post.id} id={post.id} content={post.content} />
+      {posts.map((post) => (
+        <PostCard
+          key={post.id}
+          id={post.id}
+          userId={post.user_id}
+          content={post.content}
+          username={post.username || post.users?.username || 'Utente'}
+          createdAt={post.created_at}
+          likesCount={post.likes_count || 0}
+          commentCount={post.comment_count || 0}
+        />
       ))}
     </div>
   );
 };
-
-const loadPosts = async () => {
-  setLoading(true);
-  setError(null);
-  try {
-    const postsData = await getPosts(userId ? { user_id: userId } : {});
-    setPosts(postsData);
-  } catch (err) {
-    console.error("Errore nel caricamento posts:", err);
-    setError("Errore nel caricamento dei post");
-  } finally {
-    setLoading(false);
-  }
-}
 
 export default Feed;
